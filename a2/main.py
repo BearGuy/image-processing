@@ -4,15 +4,11 @@
 #
 #   numpy, PyOpenGL, Pillow
 
-import sys, os, math, logging
-logging.basicConfig()
+import sys, os, math
 
 import numpy as np
 
 from PIL import Image
-
-import OpenGL
-OpenGL.FULL_LOGGING = True
 
 from OpenGL.GLUT import *
 from OpenGL.GL import *
@@ -27,7 +23,7 @@ windowHeight =  800
 showMagnitude = True            # for the FT, show the magnitude.  Otherwise, show the phase
 doHistoEq = False               # do histogram equalization on the FT
 
-texID = glGenTextures(1)        # for OpenGL
+texID = None                    # for OpenGL
 
 radius = 10                     # editing radius
 editMode = 's'                  # editing mode: 'a' = additive; 's' = subtractive
@@ -64,8 +60,8 @@ productFT = None
 
 import Tkinter, tkFileDialog
 
-root = Tkinter.Tk()
-root.withdraw()
+# root = Tkinter.Tk()
+# root.withdraw()
 
 
 
@@ -144,14 +140,30 @@ def display():
   glMatrixMode( GL_MODELVIEW )
   glLoadIdentity()
   glOrtho( 0, windowWidth, 0, windowHeight, 0, 1 )
+
+  # Set up texturing
+
+  global texID
   
+  if texID == None:
+    texID = glGenTextures(1)
+
+  glBindTexture( GL_TEXTURE_2D, texID )
+
+  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, [1,0,0,1] );
+
   # Images to draw, in rows and columns
 
   toDraw, rows, cols, maxHeight, maxWidth, scale, horizSpacing, vertSpacing = getImagesInfo()
 
   for r in range(rows):
     for c in range(cols):
-      if toDraw[r][c] != None:
+      if toDraw[r][c] is not None:
 
         if r == 0: # normal image
           img = toDraw[r][c]
@@ -190,7 +202,6 @@ def display():
           
         imgData = np.array( (np.ravel(show) - min) / (max - min) * 255, np.uint8 )
 
-        glBindTexture( GL_TEXTURE_2D, texID )
         glTexImage2D( GL_TEXTURE_2D, 0, GL_INTENSITY, img.shape[1], img.shape[0], 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, imgData )
 
         # Include zoom and translate
@@ -227,32 +238,32 @@ def display():
 
   glColor3f( 0.2, 0.5, 0.7 )
  
-  if image != None:
+  if image is not None:
     baseX = horizSpacing
     baseY = (vertSpacing  + maxHeight) * (rows) + 8
     drawText( baseX, baseY, imageFilename )
 
-  if imageFT != None:
+  if imageFT is not None:
     baseX = horizSpacing
     baseY = (vertSpacing  + maxHeight) * (rows-2) + vertSpacing - 18
     drawText( baseX, baseY, 'FT of %s' % imageFilename )
 
-  if filter != None:
+  if filter is not None:
     baseX = (horizSpacing + maxWidth) * 1 + horizSpacing
     baseY = (vertSpacing  + maxHeight) * rows + 8
     drawText( baseX, baseY, filterFilename )
 
-  if filterFT != None:
+  if filterFT is not None:
     baseX = (horizSpacing + maxWidth) * 1 + horizSpacing
     baseY = (vertSpacing  + maxHeight) * (rows-2) + vertSpacing - 18
     drawText( baseX, baseY, 'FT of %s' % filterFilename )
 
-  if product != None:
+  if product is not None:
     baseX = (horizSpacing + maxWidth) * 2 + horizSpacing
     baseY = (vertSpacing  + maxHeight) * (rows) + 8
     drawText( baseX, baseY, "inverse FT of product of FTs" )
     
-  if productFT != None:
+  if productFT is not None:
     baseX = (horizSpacing + maxWidth) * 2 + horizSpacing
     baseY = (vertSpacing  + maxHeight) * (rows-2) + vertSpacing - 18
     drawText( baseX, baseY, "product of FTs" )
@@ -294,7 +305,7 @@ def getImagesInfo():
   
   for row in toDraw:
     for img in row:
-      if img != None:
+      if img is not None:
         if img.shape[0] > maxHeight:
           maxHeight = img.shape[0]
         if img.shape[1] > maxWidth:
@@ -413,18 +424,18 @@ def keyboard( key, x, y ):
   elif key == 'h':
     doHistoEq = not doHistoEq
 
-  elif key == 'x' and filterFT != None and imageFT != None:
+  elif key == 'x' and filterFT is not None and imageFT is not None:
     productFT = multiplyFTs( imageFT, filterFT )
 
   elif key == '+' or key == '=':
     radius = radius + 2
-    print('radius', radius)
+    print 'radius', radius
 
   elif key == '-' or key == '_':
     radius = radius - 2
     if radius < 2:
       radius = 2
-    print('radius', radius)
+    print 'radius', radius
 
   elif key in ['a','s']:
     editMode = key
@@ -434,7 +445,7 @@ def keyboard( key, x, y ):
     translate = (0,0)
 
   else:
-    print('''keys:
+    print '''keys:
            m  toggle between magnitude and phase in the FT  
            h  toggle histogram equalization in the FT  
            I  load image
@@ -447,7 +458,7 @@ def keyboard( key, x, y ):
 
               translate with left mouse dragging
               zoom with right mouse draggin up/down
-           z  reset the translation and zoom''')
+           z  reset the translation and zoom'''
 
   glutPostRedisplay()
 
@@ -473,11 +484,11 @@ def forwardFT_all():
 
   global image, filter, product, imageFT, filterFT, productFT
 
-  if image != None:
+  if image is not None:
     imageFT = forwardFT( image )
-  if filter != None:
+  if filter is not None:
     filterFT = forwardFT( filter )
-  if product != None:
+  if product is not None:
     productFT = forwardFT( product )
 
 
@@ -489,11 +500,11 @@ def inverseFT_all():
 
   global image, filter, product, imageFT, filterFT, productFT
 
-  if image != None: 
+  if image is not None: 
     image = inverseFT( imageFT )
-  if filter != None:
+  if filter is not None:
     filter = inverseFT( filterFT )
-  if productFT != None:
+  if productFT is not None:
     product = inverseFT( productFT )
 
     
@@ -507,7 +518,7 @@ def loadImage( path ):
   try:
     img = Image.open( path ).convert( 'L' ).transpose( Image.FLIP_TOP_BOTTOM )
   except:
-    print('Failed to load image %s' % path)
+    print 'Failed to load image %s' % path
     sys.exit(1)
 
   return np.array( list( img.getdata() ), np.complex_ ).reshape( (img.size[1],img.size[0]) )
@@ -537,12 +548,12 @@ def loadFilter( path ):
         for x in f.readline().split():
           kernel.append( scale*float(x) ) # apply scaling factor here
   except:
-    print('Failed to load filter %s' % path)
+    print 'Failed to load filter %s' % path
     sys.exit(1)
 
   # Place the kernel at the centre of an array with the same dimensions as the image.
 
-  if image == None:
+  if image is None:
     result = np.zeros( (ydim,xdim) ) # only a kernel
   else:
     result = np.zeros( (image.shape[0], image.shape[1]) )
@@ -655,7 +666,7 @@ def mouse( button, state, x, y ):
 
       image = toDraw[ int(row) ][ int(col) ]
 
-      if image == None:
+      if image is None:
         return
 
       # Find pixel within image
@@ -681,7 +692,7 @@ def mouse( button, state, x, y ):
 
       modulatePixels( image, pixelX, pixelY, isFT )
 
-      print('click at', pixelX, pixelY)
+      print 'click at', pixelX, pixelY
 
       # Done
 
@@ -821,7 +832,7 @@ if len(sys.argv) > 3:
     elif cmd == 'r':
       radius = int(cmds.pop(0))
     else:
-      print("""command '%s' not understood.
+      print """command '%s' not understood.
 command-line arguments:
   f - apply forward FT
   i - apply inverse FT
@@ -832,7 +843,7 @@ command-line arguments:
   s - subtractive editing mode
   e - edit at a position like 'exxx 20 40' where exxx is one of ei, eift, of, offt, op opft (as with the 'o' command)
   m - for output, use magnitudes (default)
-  p - for output, use phases""" % cmd)
+  p - for output, use phases""" % cmd
 
 else:
       
@@ -852,14 +863,6 @@ else:
   glutMouseFunc( mouse )
   glutMotionFunc( mouseMotion )
 
-  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, [1,0,0,1] );
-
-  glEnable( GL_TEXTURE_2D )
   glDisable( GL_DEPTH_TEST )
 
   glutMainLoop()
