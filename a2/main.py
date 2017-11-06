@@ -74,6 +74,10 @@ def ft1D( signal ):
 
   return np.fft.fft( signal )
 
+def ift1D( signal ):
+
+  return np.fft.ifft( signal )
+
 
 # Do a forward FT
 #
@@ -81,12 +85,27 @@ def ft1D( signal ):
 # Output is the same.
 
 def forwardFT( image ):
-
-  # YOUR CODE HERE
-  #
-  # You must replace this code with your own, keeping the same function name are parameters.
+  # You must replace this code with your own, keeping the same function name are parameters
   
-  return np.fft.fft2( image )
+  n = image.shape[0]
+  m = image.shape[1]
+  
+  image_ft1d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+  image_ft2d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+
+  for r in range(n):
+    signal = image[r,:]
+    signal_ft = ft1D(signal)
+    image_ft1d[r,:] = signal_ft
+
+  for c in range(m):
+    signal = image_ft1d[:,c]
+    signal_ft = ft1D(signal)
+    image_ft2d[:,c] = signal_ft
+
+  return image_ft2d
+  
+  #return np.fft.fft2( image )
 
 
 
@@ -98,11 +117,25 @@ def forwardFT( image ):
 
 def inverseFT( image ):
 
-  # YOUR CODE HERE
-  #
   # You must replace this code with your own, keeping the same function name are parameters.
+  n = image.shape[0]
+  m = image.shape[1]
   
-  return np.fft.ifft2( image )
+  image_ift1d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+  image_ift2d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+
+  for r in range(n):
+    signal = image[r,:]
+    signal_ift = ift1D(signal)
+    image_ift1d[r,:] = signal_ift
+
+  for c in range(m):
+    signal = image_ift1d[:,c]
+    signal_ift = ift1D(signal)
+    image_ift2d[:,c] = signal_ift
+
+  return image_ift2d
+  #return np.fft.ifft2( image )
 
 
 
@@ -117,10 +150,28 @@ def inverseFT( image ):
 
 
 def multiplyFTs( image, filter ):
+  for r in range(filter.shape[0]):
+    filter[r,:] = filter[r,:] * np.exp(1j*np.pi*r)
 
-  # YOUR CODE HERE
+  for c in range(filter.shape[1]):
+    filter[:,c] = filter[:,c] * np.exp(1j*np.pi*c)
 
-  return image # (this is wrong) 
+  convolved_image = filter*image
+
+  return convolved_image
+    
+  #image_spectral = forwardFT(image)
+  #filter_spectral = forwardFT(filter)
+
+  #convolved_image_spectral = image_spectral * filter_spectral
+
+  #convolved_image = inverseFT(convolved_image_spectral)
+
+  #return convolved_image
+
+  #return image # (this is wrong) 
+
+  #return image # (this is wrong) 
 
 
 
@@ -752,11 +803,33 @@ def mouseMotion( x, y ):
 
 def modulatePixels( image, x, y, isFT ):
 
-  # YOUR CODE HERE
+  print 'point at ', x, y
+  r_mean = 0
+  std = radius/2
 
-  pass
+  xdim = image.shape[1]
+  ydim = image.shape[0]
 
+  for x0 in range(xdim):
+    
+    for y0 in range(ydim):
+      r = np.sqrt((x0 - x)**2 + (y0 - y)**2)
+      
+      if r <= radius: 
+        gaussian = 1/(std*np.sqrt(2*np.pi))*np.exp(-(r-r_mean)**2/(2*std**2))
+        value = image[ydim-y-1][xdim-x-1]
 
+        if isFT:
+          value = np.log(value)
+
+        if editMode == 'a':
+          value = value*1 + 0.1*gaussian
+        elif editMode == 's':
+          value = value*1 - gaussian
+        if isFT:
+          value = np.exp(value)
+ 
+        image[ydim-y-1][xdim-x-1] = value
 
 # For an image coordinate, if it's < 0 or >= max, wrap the coorindate
 # around so that it's in the range [0,max-1].  This is useful in the
