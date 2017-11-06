@@ -60,8 +60,8 @@ productFT = None
 
 import Tkinter, tkFileDialog
 
-# root = Tkinter.Tk()
-# root.withdraw()
+root = Tkinter.Tk()
+root.withdraw()
 
 
 
@@ -74,6 +74,8 @@ def ft1D( signal ):
 
   return np.fft.fft( signal )
 
+def ift1D( signal ):
+  return np.fft.ifft( signal )
 
 # Do a forward FT
 #
@@ -84,9 +86,27 @@ def forwardFT( image ):
 
   # YOUR CODE HERE
   #
-  # You must replace this code with your own, keeping the same function name are parameters.
+  # You must replace this code with your own, keeping the same function name are parameters
   
-  return np.fft.fft2( image )
+  n = image.shape[0]
+  m = image.shape[1]
+  
+  image_ft1d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+  image_ft2d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+
+  for r in range(n):
+    signal = image[r,:]
+    signal_ft = ft1D(signal)
+    image_ft1d[r,:] = signal_ft
+
+  for c in range(m):
+    signal = image_ft1d[:,c]
+    signal_ft = ft1D(signal)
+    image_ft2d[:,c] = signal_ft
+
+  return image_ft2d
+  
+  #return np.fft.fft2( image )
 
 
 
@@ -102,7 +122,25 @@ def inverseFT( image ):
   #
   # You must replace this code with your own, keeping the same function name are parameters.
   
-  return np.fft.ifft2( image )
+  n = image.shape[0]
+  m = image.shape[1]
+  
+  image_ift1d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+  image_ift2d = np.zeros(image.shape) + 1j*np.zeros(image.shape)
+
+  for r in range(n):
+    signal = image[r,:]
+    signal_ift = ift1D(signal)
+    image_ift1d[r,:] = signal_ift
+
+  for c in range(m):
+    signal = image_ift1d[:,c]
+    signal_ift = ift1D(signal)
+    image_ift2d[:,c] = signal_ift
+
+  return image_ift2d
+ 
+  #return np.fft.ifft2( image )
 
 
 
@@ -120,7 +158,26 @@ def multiplyFTs( image, filter ):
 
   # YOUR CODE HERE
 
-  return image # (this is wrong) 
+  for r in range(filter.shape[0]):
+    filter[r,:] = filter[r,:] * np.exp(1j*np.pi*r)
+
+  for c in range(filter.shape[1]):
+    filter[:,c] = filter[:,c] * np.exp(1j*np.pi*c)
+
+  convolved_image = filter*image
+
+  return convolved_image
+    
+  #image_spectral = forwardFT(image)
+  #filter_spectral = forwardFT(filter)
+
+  #convolved_image_spectral = image_spectral * filter_spectral
+
+  #convolved_image = inverseFT(convolved_image_spectral)
+
+  #return convolved_image
+
+  #return image # (this is wrong) 
 
 
 
@@ -140,23 +197,7 @@ def display():
   glMatrixMode( GL_MODELVIEW )
   glLoadIdentity()
   glOrtho( 0, windowWidth, 0, windowHeight, 0, 1 )
-
-  # Set up texturing
-
-  global texID
   
-  if texID == None:
-    texID = glGenTextures(1)
-
-  glBindTexture( GL_TEXTURE_2D, texID )
-
-  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, [1,0,0,1] );
-
   # Images to draw, in rows and columns
 
   toDraw, rows, cols, maxHeight, maxWidth, scale, horizSpacing, vertSpacing = getImagesInfo()
@@ -202,6 +243,7 @@ def display():
           
         imgData = np.array( (np.ravel(show) - min) / (max - min) * 255, np.uint8 )
 
+        glBindTexture( GL_TEXTURE_2D, texID )
         glTexImage2D( GL_TEXTURE_2D, 0, GL_INTENSITY, img.shape[1], img.shape[0], 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, imgData )
 
         # Include zoom and translate
@@ -753,9 +795,34 @@ def mouseMotion( x, y ):
 def modulatePixels( image, x, y, isFT ):
 
   # YOUR CODE HERE
+  print 'point at ', x, y
+  r_mean = 0
+  std = radius/2
 
-  pass
+  xdim = image.shape[1]
+  ydim = image.shape[0]
 
+  for x0 in range(xdim):
+    
+    for y0 in range(ydim):
+      r = np.sqrt((x0 - x)**2 + (y0 - y)**2)
+      
+      if r <= radius: 
+        gaussian = 1/(std*np.sqrt(2*np.pi))*np.exp(-(r-r_mean)**2/(2*std**2))
+        value = image[ydim-y-1][xdim-x-1]
+
+        if isFT:
+          value = np.log(value)
+
+        if editMode == 'a':
+          value = value*1 + 0.1*gaussian
+        elif editMode == 's':
+          value = value*1 - gaussian
+
+        if isFT:
+          value = np.exp(value)
+
+        image[ydim-y-1][xdim-x-1] = value
 
 
 # For an image coordinate, if it's < 0 or >= max, wrap the coorindate
@@ -847,6 +914,8 @@ command-line arguments:
 
 else:
       
+  texID = glGenTextures(1)
+
   # Run OpenGL
 
   glutInit()
@@ -863,6 +932,14 @@ else:
   glutMouseFunc( mouse )
   glutMotionFunc( mouseMotion )
 
+  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+  glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, [1,0,0,1] );
+
+  glEnable( GL_TEXTURE_2D )
   glDisable( GL_DEPTH_TEST )
 
   glutMainLoop()
